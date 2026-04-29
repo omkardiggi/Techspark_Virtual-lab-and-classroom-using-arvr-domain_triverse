@@ -1,0 +1,1348 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NovaSci Lab — Virtual Science Laboratory</title>
+  <link rel="stylesheet" href="nova-styles.css">
+
+  <!-- Three.js for 3D equipment rendering -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- MediaPipe Hands for gesture tracking -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+</head>
+
+<body>
+
+  <div id="toast"></div>
+
+  <!-- Score Modal -->
+  <!-- QUIZ SCREEN — appears after experiment completion -->
+  <div id="quiz" class="screen" style="flex-direction:column;">
+    <div class="quiz-card">
+      <div class="quiz-header">
+        <h2 data-i18n="quizTitle">Knowledge Check — <span id="quiz-exp-title">Experiment</span></h2>
+        <div style="display:flex; align-items:center; gap:0.6rem;">
+          <div id="quiz-score-badge" style="background:rgba(74,222,128,0.12); border:1px solid rgba(74,222,128,0.35); color:#4ade80; padding:6px 12px; border-radius:999px; font-size:0.82rem; font-weight:700; font-family:'JetBrains Mono', monospace;">★ 0</div>
+          <div class="quiz-progress" id="quiz-progress">1 / 5</div>
+        </div>
+      </div>
+      <div class="quiz-progress-bar">
+        <div class="quiz-progress-fill" id="quiz-progress-fill" style="width: 25%;"></div>
+      </div>
+      <div class="quiz-q" id="quiz-q">Question text…</div>
+      <div class="quiz-options" id="quiz-options"></div>
+      <div class="quiz-feedback" id="quiz-feedback"></div>
+      <div class="quiz-actions">
+        <button class="quiz-voice-btn" id="quiz-voice-btn" onclick="toggleQuizVoice()"
+          title="Read question aloud">🔊</button>
+        <button class="quiz-btn skip" onclick="skipQuiz()" data-i18n="skipQuiz">Skip Quiz</button>
+        <button class="quiz-btn primary" id="quiz-next-btn" onclick="nextQuizQuestion()" disabled data-i18n="nextQ">Next
+          →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULTS SCREEN — final summary -->
+  <div id="results" class="screen" style="flex-direction:column;">
+    <div class="results-wrap">
+      <div class="results-hero">
+        <div class="results-trophy" id="results-trophy">🏆</div>
+        <h1 class="results-headline" id="results-headline">Experiment <span>Complete!</span></h1>
+        <p class="results-subline" id="results-subline">Great work — here's how you did.</p>
+        <div class="results-points" id="results-points">0</div>
+        <div class="results-points-label" data-i18n="pointsEarned">Points Earned</div>
+      </div>
+
+      <div class="results-grid">
+        <div class="results-stat" data-type="quiz">
+          <div class="results-stat-icon">🎯</div>
+          <div class="results-stat-val" id="r-quiz">0/4</div>
+          <div class="results-stat-label" data-i18n="quizScore">Quiz Score</div>
+        </div>
+        <div class="results-stat" data-type="acc">
+          <div class="results-stat-icon">✓</div>
+          <div class="results-stat-val" id="r-acc">0%</div>
+          <div class="results-stat-label" data-i18n="accuracy">Accuracy</div>
+        </div>
+        <div class="results-stat" data-type="time">
+          <div class="results-stat-icon">⏱</div>
+          <div class="results-stat-val" id="r-time">0s</div>
+          <div class="results-stat-label" data-i18n="timeTaken">Time</div>
+        </div>
+        <div class="results-stat" data-type="steps">
+          <div class="results-stat-icon">📋</div>
+          <div class="results-stat-val" id="r-steps">0/0</div>
+          <div class="results-stat-label" data-i18n="stepsDone">Steps Done</div>
+        </div>
+      </div>
+
+      <div class="results-chart-card">
+        <div class="results-card-title">
+          <span class="ico">📊</span>
+          <span data-i18n="performanceTitle">Your Performance</span>
+        </div>
+        <canvas id="results-perf-chart" class="results-chart-canvas" width="800" height="200"></canvas>
+      </div>
+
+      <div class="results-summary-card" id="quiz-review-card" style="display:none;">
+        <div class="results-card-title">
+          <span class="ico">📝</span>
+          <span data-i18n="reviewTitle">Quiz Review</span>
+        </div>
+        <div class="results-quiz-review" id="results-quiz-review"></div>
+      </div>
+
+      <div class="results-summary-card">
+        <div class="results-card-title">
+          <span class="ico">💡</span>
+          <span data-i18n="takeawayTitle">Key Takeaway</span>
+        </div>
+        <div class="results-summary" id="results-summary">Loading…</div>
+      </div>
+
+      <div class="results-actions">
+        <button class="results-btn" onclick="retryExperiment()">↻ <span data-i18n="tryAgain">Try Again</span></button>
+        <button class="results-btn" onclick="goToDashboard()">📚 <span data-i18n="moreExp">More
+            Experiments</span></button>
+        <button class="results-btn primary" onclick="nextExperiment()">→ <span data-i18n="nextExp">Next
+            Experiment</span></button>
+      </div>
+    </div>
+
+    <!-- Voice Assistant FAB -->
+    <button class="voice-fab" id="results-voice-fab" onclick="toggleResultsVoice()"
+      title="Read results aloud">🔊</button>
+  </div>
+
+  <!-- LANDING SCREEN -->
+  <div id="login" class="screen active">
+    <div
+      style="display:flex; justify-content:center; align-items:center; height:100vh; background: var(--bg); flex-direction:column; width:100%;">
+      <div
+        style="background: var(--surface2); padding: 40px; border-radius: 20px; box-shadow: var(--shadow-lg); border: 1px solid var(--border-strong); width: 100%; max-width: 400px; text-align: center;">
+        <div style="font-size: 36px; margin-bottom: 20px;">🔬</div>
+        <h2
+          style="color: white; font-family: 'Space Grotesk', sans-serif; font-weight: 700; margin-bottom: 30px; font-size: 24px;">
+          NovaSci Lab Login</h2>
+        <input type="email" id="login-email" placeholder="Email Address"
+          style="width: 100%; padding: 12px 16px; margin-bottom: 16px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: white; font-family: 'Inter', sans-serif;"
+          value="student@novasci.edu">
+        <input type="password" id="login-password" placeholder="Password"
+          style="width: 100%; padding: 12px 16px; margin-bottom: 24px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: white; font-family: 'Inter', sans-serif;"
+          value="password123">
+        <button onclick="handleLogin()"
+          style="width: 100%; padding: 14px; border-radius: 12px; background: var(--accent); color: white; border: none; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 16px; cursor: pointer; transition: all 0.2s;">Login
+          to Main Menu</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="landing" class="screen">
+
+    <!-- Sticky nav -->
+    <nav class="landing-nav">
+      <div class="landing-nav-logo">⚗️ <span data-i18n="brand">NovaSci Lab</span></div>
+      <div class="landing-nav-links">
+        <a onclick="scrollToSection('how-section')" data-i18n="navHow">How it Works</a>
+        <a onclick="scrollToSection('features-section')" data-i18n="navFeatures">Features</a>
+        <a onclick="scrollToSection('subjects-section')" data-i18n="navSubjects">Subjects</a>
+        <a onclick="scrollToSection('about-section')" data-i18n="navAbout">About</a>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="lang-toggle" id="lang-btn-landing" onclick="toggleLang()" title="Change language">EN</button>
+        <button class="landing-nav-cta" onclick="showScreen('dashboard')" data-i18n="navCta">Enter Lab →</button>
+      </div>
+    </nav>
+
+    <!-- HERO -->
+    <section class="hero-section">
+      <div class="hero-blob b1"></div>
+      <div class="hero-blob b2"></div>
+      <div class="hero-blob b3"></div>
+      <canvas id="bg-canvas"></canvas>
+      <div class="landing-content">
+        <div class="logo-badge" data-i18n="badge">NovaSci Lab v3.0</div>
+        <h1 class="landing-title">
+          <span data-i18n="heroLine1">Science</span><br>
+          <span data-i18n="heroLine2">Comes Alive</span>
+        </h1>
+        <p class="landing-sub" data-i18n="heroSub">
+          Interactive virtual experiments with real physics simulations. Drag, drop, and tweak
+          sliders to explore Physics, Chemistry &amp; Biology — guided step-by-step by an AI tutor.
+        </p>
+        <div class="landing-actions">
+          <button class="btn-primary" onclick="showScreen('dashboard')" data-i18n="ctaPrimary">Enter the Lab →</button>
+          <button class="btn-outline" onclick="scrollToSection('features-section')" data-i18n="ctaSecondary">Learn
+            More</button>
+        </div>
+        <div class="stats-row">
+          <div class="stat">
+            <div class="stat-num">16</div>
+            <div class="stat-label" data-i18n="statExp">Experiments</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num">4</div>
+            <div class="stat-label" data-i18n="statSub">Subjects</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num">AI</div>
+            <div class="stat-label" data-i18n="statAi">Guided</div>
+          </div>
+          <div class="stat">
+            <div class="stat-num">100%</div>
+            <div class="stat-label" data-i18n="statInter">Interactive</div>
+          </div>
+        </div>
+      </div>
+      <div class="scroll-indicator">
+        <span data-i18n="scrollHint">Scroll to explore</span>
+        <div class="scroll-indicator-arrow"></div>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="how-section">
+      <div class="land-section" id="how-section">
+        <div class="reveal">
+          <span class="section-eyebrow" data-i18n="howEyebrow">Process</span>
+          <h2 class="section-title" data-i18n="howTitle">How It <span>Works</span></h2>
+          <p class="section-sub" data-i18n="howSub">Three simple steps to start exploring science with hands-on,
+            AI-guided virtual experiments.</p>
+        </div>
+        <div class="how-grid reveal-stagger">
+          <div class="how-step">
+            <div class="how-step-icon">🔍</div>
+            <h3 data-i18n="how1Title">1. Choose an Experiment</h3>
+            <p data-i18n="how1Desc">Browse our library of 9 curated experiments across Physics, Chemistry, and Biology —
+              picked for clarity, curiosity, and core curriculum.</p>
+          </div>
+          <div class="how-step">
+            <div class="how-step-icon">🧪</div>
+            <h3 data-i18n="how2Title">2. Run Real Simulations</h3>
+            <p data-i18n="how2Desc">Drag objects, flip switches, tweak parameters with sliders. Every experiment is
+              backed by real physics and chemistry equations.</p>
+          </div>
+          <div class="how-step">
+            <div class="how-step-icon">🤖</div>
+            <h3 data-i18n="how3Title">3. Learn with AI Tutor</h3>
+            <p data-i18n="how3Desc">An AI guide gives step-by-step suggestions, explains concepts, and answers your
+              questions in English, Hindi, or Kannada.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- KEY FEATURES -->
+    <section>
+      <div class="land-section" id="features-section">
+        <div class="reveal">
+          <span class="section-eyebrow" data-i18n="featEyebrow">Features</span>
+          <h2 class="section-title" data-i18n="featTitle">Everything you need to <span>understand</span></h2>
+          <p class="section-sub" data-i18n="featSub">Powerful tools that turn passive reading into active discovery.</p>
+        </div>
+        <div class="features-grid reveal-stagger">
+          <div class="feature-card" data-c="blue">
+            <div class="feature-icon">⚛️</div>
+            <h3 data-i18n="f1Title">Real Physics Engine</h3>
+            <p data-i18n="f1Desc">Pendulum motion, Ohm's law, lens optics — all governed by actual equations, not
+              pre-recorded animations.</p>
+          </div>
+          <div class="feature-card" data-c="purple">
+            <div class="feature-icon">🤖</div>
+            <h3 data-i18n="f2Title">Groq AI Tutor</h3>
+            <p data-i18n="f2Desc">Ask any question and get an instant, contextual answer about your current experiment
+              and step.</p>
+          </div>
+          <div class="feature-card" data-c="green">
+            <div class="feature-icon">📊</div>
+            <h3 data-i18n="f3Title">Live Data &amp; Charts</h3>
+            <p data-i18n="f3Desc">Watch readings update in real time. Plots auto-generate so you can see relationships
+              clearly.</p>
+          </div>
+          <div class="feature-card" data-c="orange">
+            <div class="feature-icon">🌐</div>
+            <h3 data-i18n="f4Title">Multilingual</h3>
+            <p data-i18n="f4Desc">Switch between English, Hindi, and Kannada. AI explanations and voice input adapt to
+              your language.</p>
+          </div>
+          <div class="feature-card" data-c="blue">
+            <div class="feature-icon">🎤</div>
+            <h3 data-i18n="f5Title">Voice Input &amp; TTS</h3>
+            <p data-i18n="f5Desc">Speak your questions and the AI reads explanations aloud — perfect for hands-on lab
+              time.</p>
+          </div>
+          <div class="feature-card" data-c="purple">
+            <div class="feature-icon">🏆</div>
+            <h3 data-i18n="f6Title">Score &amp; Track Progress</h3>
+            <p data-i18n="f6Desc">Earn points for completing experiments. Faster, more accurate work earns higher
+              scores.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SUBJECTS -->
+    <section>
+      <div class="land-section subjects-section" id="subjects-section">
+        <div class="reveal">
+          <span class="section-eyebrow" data-i18n="subjEyebrow">Coverage</span>
+          <h2 class="section-title" data-i18n="subjTitle">Four subjects, <span>sixteen experiments</span></h2>
+          <p class="section-sub" style="margin-left:auto; margin-right:auto;" data-i18n="subjSub">Carefully chosen
+            experiments that cover the most important concepts in school-level science.</p>
+        </div>
+        <div class="subjects-row reveal-stagger">
+          <div class="subject-pill" data-subject="physics" onclick="showScreen('dashboard')">
+            <span class="pill-emoji">⚡</span>
+            <span data-i18n="subPhysics">Physics</span>
+            <span class="pill-count" data-i18n="subCount3">4 labs</span>
+          </div>
+          <div class="subject-pill" data-subject="chemistry" onclick="showScreen('dashboard')">
+            <span class="pill-emoji">🧪</span>
+            <span data-i18n="subChemistry">Chemistry</span>
+            <span class="pill-count" data-i18n="subCount3b">4 labs</span>
+          </div>
+          <div class="subject-pill" data-subject="biology" onclick="showScreen('dashboard')">
+            <span class="pill-emoji">🔬</span>
+            <span data-i18n="subBiology">Biology</span>
+            <span class="pill-count" data-i18n="subCount3c">4 labs</span>
+          </div>
+          <div class="subject-pill" data-subject="electronics" onclick="showScreen('dashboard')">
+            <span class="pill-emoji">⚙️</span>
+            <span data-i18n="subElectronics">Electronics</span>
+            <span class="pill-count" data-i18n="subCount4d">4 labs</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section class="about-wrap">
+      <div class="about-section land-section reveal" id="about-section" style="padding-top:0; padding-bottom:0;">
+        <div class="about-grid">
+          <div class="about-text">
+            <span class="section-eyebrow" data-i18n="aboutEyebrow">About</span>
+            <h2 data-i18n="aboutTitle">Built for curious minds</h2>
+            <p data-i18n="aboutP1">NovaSci Lab is an open virtual laboratory designed to make science accessible to
+              every student — regardless of school resources, location, or language.</p>
+            <p data-i18n="aboutP2">We believe great science teaching is hands-on, interactive, and personalised. So we
+              built a lab where you can break things, restart, and explore at your own pace.</p>
+            <ul class="about-points">
+              <li data-i18n="aboutPt1">Free for all students &amp; teachers</li>
+              <li data-i18n="aboutPt2">No installation — works in any modern browser</li>
+              <li data-i18n="aboutPt3">Privacy-respecting: your work stays on your device</li>
+              <li data-i18n="aboutPt4">Aligned with NCERT &amp; state board curricula</li>
+            </ul>
+          </div>
+          <div class="about-visual">
+            <div class="about-orbit">
+              <div class="about-orbit-ring">
+                <div class="about-orbit-dot d1"></div>
+              </div>
+              <div class="about-orbit-ring r2">
+                <div class="about-orbit-dot d2"></div>
+                <div class="about-orbit-dot d3"></div>
+              </div>
+              <div class="about-orbit-core">⚗️</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FINAL CTA -->
+    <section class="cta-section">
+      <div class="cta-card reveal">
+        <h2 data-i18n="ctaTitle">Ready to start experimenting?</h2>
+        <p data-i18n="ctaSub">Jump into your first experiment in under 10 seconds. No sign-up, no setup.</p>
+        <button class="btn-cta" onclick="showScreen('dashboard')" data-i18n="ctaButton">Enter the Lab →</button>
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="land-footer">
+      <strong>⚗️ NovaSci Lab</strong> · <span data-i18n="footer">Virtual Science Laboratory</span> · v3.0
+    </footer>
+
+  </div>
+
+  <!-- DASHBOARD SCREEN -->
+  <div id="dashboard" class="screen" style="flex-direction:row; overflow:hidden;">
+    
+    <!-- SIDEBAR -->
+    <div class="sidebar" style="width:260px; background:rgba(7,9,26,0.8); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:1.5rem 1rem; z-index:100; backdrop-filter:blur(20px);">
+      <div class="top-bar-logo" style="margin-bottom:2.5rem; padding-left:0.5rem; font-size:1.4rem;">⚗️ NovaSci</div>
+      <nav class="sidebar-nav" style="display:flex; flex-direction:column; gap:0.5rem;">
+        <button class="sidebar-link active" onclick="switchDashView('virtual-lab')" style="background:var(--accent-soft); color:var(--accent); border:1px solid rgba(96,165,250,0.3); padding:12px 16px; border-radius:12px; text-align:left; font-weight:600; cursor:pointer; font-size:0.95rem; display:flex; align-items:center; gap:10px; transition:all 0.2s;">
+          🧪 Virtual Lab
+        </button>
+        <button class="sidebar-link" onclick="switchDashView('ar-vr')" style="background:transparent; color:var(--text2); border:1px solid transparent; padding:12px 16px; border-radius:12px; text-align:left; font-weight:500; cursor:pointer; font-size:0.95rem; display:flex; align-items:center; gap:10px; transition:all 0.2s; position:relative;">
+          🥽 AR / VR Lab
+          <span style="margin-left:auto; background:linear-gradient(135deg, #4ade80, #a78bfa); color:white; font-size:0.6rem; padding:2px 7px; border-radius:999px; font-weight:700; letter-spacing:0.5px;">NEW</span>
+        </button>
+        <button class="sidebar-link" onclick="switchDashView('daily-challenge')" style="background:transparent; color:var(--text2); border:1px solid transparent; padding:12px 16px; border-radius:12px; text-align:left; font-weight:500; cursor:pointer; font-size:0.95rem; display:flex; align-items:center; gap:10px; transition:all 0.2s; position:relative;">
+          🎯 Daily Challenge
+          <span id="dc-sidebar-dot" style="display:none; position:absolute; top:10px; right:14px; width:8px; height:8px; background:#fb923c; border-radius:50%; box-shadow:0 0 8px #fb923c;"></span>
+        </button>
+        <button class="sidebar-link" onclick="switchDashView('practical-record')" style="background:transparent; color:var(--text2); border:1px solid transparent; padding:12px 16px; border-radius:12px; text-align:left; font-weight:500; cursor:pointer; font-size:0.95rem; display:flex; align-items:center; gap:10px; transition:all 0.2s;">
+          📄 Practical File
+        </button>
+        <button class="sidebar-link" onclick="switchDashView('formula-sheet')" style="background:transparent; color:var(--text2); border:1px solid transparent; padding:12px 16px; border-radius:12px; text-align:left; font-weight:500; cursor:pointer; font-size:0.95rem; display:flex; align-items:center; gap:10px; transition:all 0.2s;">
+          📐 Formula Sheet
+        </button>
+        <button class="sidebar-link" onclick="switchDashView('achievements')" style="background:transparent; color:var(--text2); border:1px solid transparent; padding:12px 16px; border-radius:12px; text-align:left; font-weight:500; cursor:pointer; font-size:0.95rem; display:flex; align-items:center; gap:10px; transition:all 0.2s;">
+          🏆 Achievements
+        </button>
+        <button class="sidebar-link" onclick="switchDashView('student-record')" style="background:transparent; color:var(--text2); border:1px solid transparent; padding:12px 16px; border-radius:12px; text-align:left; font-weight:500; cursor:pointer; font-size:0.95rem; display:flex; align-items:center; gap:10px; transition:all 0.2s;">
+          📊 Student Record
+        </button>
+        <button class="sidebar-link" onclick="switchDashView('ai-call')" style="background:transparent; color:var(--text2); border:1px solid transparent; padding:12px 16px; border-radius:12px; text-align:left; font-weight:500; cursor:pointer; font-size:0.95rem; display:flex; align-items:center; gap:10px; transition:all 0.2s;">
+          🤖 AI Voice Call
+        </button>
+        <button class="sidebar-link" onclick="switchDashView('notes')" style="background:transparent; color:var(--text2); border:1px solid transparent; padding:12px 16px; border-radius:12px; text-align:left; font-weight:500; cursor:pointer; font-size:0.95rem; display:flex; align-items:center; gap:10px; transition:all 0.2s;">
+          📝 Notes
+        </button>
+        <button class="sidebar-link" onclick="switchDashView('study-planner')" style="background:transparent; color:var(--text2); border:1px solid transparent; padding:12px 16px; border-radius:12px; text-align:left; font-weight:500; cursor:pointer; font-size:0.95rem; display:flex; align-items:center; gap:10px; transition:all 0.2s;">
+          📅 Study Planner
+        </button>
+      </nav>
+      
+      <div style="margin-top:auto; padding-top:1.5rem; border-top:1px solid var(--border);">
+        <button class="sidebar-link" onclick="showScreen('landing')" style="background:transparent; color:var(--text2); border:1px solid transparent; padding:10px 16px; border-radius:12px; text-align:left; font-weight:500; cursor:pointer; font-size:0.95rem; display:flex; align-items:center; gap:10px; transition:all 0.2s; width:100%;">
+          🏠 Home
+        </button>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="dashboard-main" style="flex:1; display:flex; flex-direction:column; height:100vh; overflow:hidden;">
+      
+      <!-- Top Bar -->
+      <div class="top-bar" style="border-bottom:1px solid var(--border); padding:1rem 2rem; background:rgba(7,9,26,0.5); backdrop-filter:blur(20px);">
+        <div></div> <!-- Spacer -->
+        <div style="display:flex; gap:1rem; align-items:center;">
+          <div class="score-badge">⭐ <span id="total-score">0</span> pts</div>
+          <button class="lang-toggle" id="lang-btn" onclick="toggleLang()">EN</button>
+        </div>
+      </div>
+
+      <!-- Views Area -->
+      <div class="dash-views-area" style="flex:1; overflow-y:auto; position:relative;">
+        
+        <!-- VIEW 1: Virtual Lab -->
+        <div id="view-virtual-lab" class="dash-view" style="display:block;">
+          <div class="dash-body" style="padding:2.5rem 2rem; max-width:1200px; margin:0 auto;">
+            <div class="dash-header">
+              <h2 id="dash-title">Choose an Experiment</h2>
+              <p id="dash-sub">Select from Physics, Chemistry, or Biology to begin your virtual lab session</p>
+            </div>
+            <div class="category-tabs">
+              <button class="tab-btn active" data-cat="all" onclick="filterCat('all', this)">All</button>
+              <button class="tab-btn" data-cat="physics" onclick="filterCat('physics', this)">⚡ Physics</button>
+              <button class="tab-btn" data-cat="chemistry" onclick="filterCat('chemistry', this)">🧪 Chemistry</button>
+              <button class="tab-btn" data-cat="biology" onclick="filterCat('biology', this)">🔬 Biology</button>
+              <button class="tab-btn" data-cat="electronics" onclick="filterCat('electronics', this)">⚙️ Electronics</button>
+            </div>
+            <div class="experiments-grid" id="exp-grid"></div>
+          </div>
+        </div>
+
+        <!-- VIEW 2: Student Record -->
+        <div id="view-student-record" class="dash-view" style="display:none; padding:2.5rem 2rem; max-width:1280px; margin:0 auto; height:calc(100vh - 150px); overflow-y:auto;">
+          <div class="dash-header">
+            <h2>Student <span>Record</span></h2>
+            <p>Your full learning footprint — XP, mastery, attempt history, and AI-powered insights.</p>
+          </div>
+
+          <!-- HERO STATS ROW -->
+          <div class="sr-hero" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:1rem; margin-top:1.5rem;">
+            <div class="sr-stat" style="background:linear-gradient(135deg, rgba(96,165,250,0.18), rgba(96,165,250,0.04)); border:1px solid rgba(96,165,250,0.25); border-radius:16px; padding:1.25rem;">
+              <div style="font-size:0.8rem; color:var(--text2); letter-spacing:0.5px; text-transform:uppercase;">Total XP</div>
+              <div style="font-size:2.1rem; font-weight:800; color:var(--accent); margin-top:0.4rem; display:flex; align-items:baseline; gap:0.4rem;">
+                <span id="record-total-pts">0</span><span style="font-size:1rem;">🏆</span>
+              </div>
+              <div id="record-rank" style="font-size:0.8rem; color:var(--text3); margin-top:0.3rem;">Rookie Scientist</div>
+            </div>
+            <div class="sr-stat" style="background:linear-gradient(135deg, rgba(74,222,128,0.18), rgba(74,222,128,0.04)); border:1px solid rgba(74,222,128,0.25); border-radius:16px; padding:1.25rem;">
+              <div style="font-size:0.8rem; color:var(--text2); letter-spacing:0.5px; text-transform:uppercase;">Experiments</div>
+              <div style="font-size:2.1rem; font-weight:800; color:var(--green); margin-top:0.4rem;">
+                <span id="record-exp-count">0</span><span style="font-size:1rem; color:var(--text3);"> / 16</span>
+              </div>
+              <div style="margin-top:0.5rem; height:6px; background:rgba(74,222,128,0.15); border-radius:3px; overflow:hidden;">
+                <div id="record-exp-bar" style="height:100%; width:0%; background:var(--green); transition:width 0.6s ease;"></div>
+              </div>
+            </div>
+            <div class="sr-stat" style="background:linear-gradient(135deg, rgba(167,139,250,0.18), rgba(167,139,250,0.04)); border:1px solid rgba(167,139,250,0.25); border-radius:16px; padding:1.25rem;">
+              <div style="font-size:0.8rem; color:var(--text2); letter-spacing:0.5px; text-transform:uppercase;">Avg Accuracy</div>
+              <div style="font-size:2.1rem; font-weight:800; color:var(--accent2); margin-top:0.4rem;">
+                <span id="record-avg-acc">—</span><span style="font-size:1rem;">%</span>
+              </div>
+              <div id="record-attempts" style="font-size:0.8rem; color:var(--text3); margin-top:0.3rem;">0 attempts</div>
+            </div>
+            <div class="sr-stat" style="background:linear-gradient(135deg, rgba(251,146,60,0.18), rgba(251,146,60,0.04)); border:1px solid rgba(251,146,60,0.25); border-radius:16px; padding:1.25rem;">
+              <div style="font-size:0.8rem; color:var(--text2); letter-spacing:0.5px; text-transform:uppercase;">Streak</div>
+              <div style="font-size:2.1rem; font-weight:800; color:var(--accent3); margin-top:0.4rem; display:flex; align-items:baseline; gap:0.4rem;">
+                <span id="record-streak">0</span><span style="font-size:1rem;">🔥</span>
+              </div>
+              <div id="record-streak-label" style="font-size:0.8rem; color:var(--text3); margin-top:0.3rem;">Days active</div>
+            </div>
+          </div>
+
+          <!-- SUBJECT MASTERY -->
+          <div style="background:rgba(17,20,43,0.6); border:1px solid var(--border); border-radius:16px; padding:1.75rem; margin-top:1.5rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
+              <h3 style="font-size:1.15rem; margin:0;">Subject Mastery</h3>
+              <span style="font-size:0.8rem; color:var(--text3);">Best score per experiment, averaged by subject</span>
+            </div>
+            <div id="record-subject-mastery" style="display:grid; grid-template-columns:repeat(2, 1fr); gap:1rem;">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <!-- TWO COLUMN: EXPERIMENT PROGRESS + AI INSIGHTS -->
+          <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:1.5rem; margin-top:1.5rem;">
+            <!-- Experiment Progress Grid -->
+            <div style="background:rgba(17,20,43,0.6); border:1px solid var(--border); border-radius:16px; padding:1.75rem;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; gap:1rem; flex-wrap:wrap;">
+                <h3 style="font-size:1.15rem; margin:0;">Experiment Progress</h3>
+                <div style="display:flex; gap:0.4rem;">
+                  <button class="sr-filter-btn" data-filter="all" onclick="filterExpProgress('all', this)" style="background:var(--accent-soft); color:var(--accent); border:1px solid rgba(96,165,250,0.35); border-radius:8px; padding:5px 10px; font-size:0.78rem; cursor:pointer;">All</button>
+                  <button class="sr-filter-btn" data-filter="physics" onclick="filterExpProgress('physics', this)" style="background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:8px; padding:5px 10px; font-size:0.78rem; cursor:pointer;">Physics</button>
+                  <button class="sr-filter-btn" data-filter="chemistry" onclick="filterExpProgress('chemistry', this)" style="background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:8px; padding:5px 10px; font-size:0.78rem; cursor:pointer;">Chem</button>
+                  <button class="sr-filter-btn" data-filter="biology" onclick="filterExpProgress('biology', this)" style="background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:8px; padding:5px 10px; font-size:0.78rem; cursor:pointer;">Bio</button>
+                  <button class="sr-filter-btn" data-filter="electronics" onclick="filterExpProgress('electronics', this)" style="background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:8px; padding:5px 10px; font-size:0.78rem; cursor:pointer;">Elec</button>
+                </div>
+              </div>
+              <div id="record-exp-grid" style="display:grid; grid-template-columns:repeat(2, 1fr); gap:0.85rem; max-height:520px; overflow-y:auto; padding-right:4px;">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+
+            <!-- AI Insights + Activity -->
+            <div style="display:flex; flex-direction:column; gap:1.25rem;">
+              <div style="background:rgba(17,20,43,0.6); border:1px solid var(--border); border-radius:16px; padding:1.5rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.85rem;">
+                  <h3 style="font-size:1.05rem; margin:0;">🤖 AI Insights</h3>
+                  <button class="btn-primary" style="padding:7px 14px; font-size:0.78rem; border-radius:8px;" id="btn-analyze-risk" onclick="analyzeRiskFactor()">Re-analyse</button>
+                </div>
+                <div id="risk-analysis-output" style="background:var(--surface2); padding:1rem; border-radius:10px; color:var(--text2); font-size:0.9rem; min-height:120px; line-height:1.65;">
+                  Complete a few experiments and click <em>Re-analyse</em> to get a personalised diagnostic from Groq AI — strengths, weak topics, and what to study next.
+                </div>
+              </div>
+
+              <div style="background:rgba(17,20,43,0.6); border:1px solid var(--border); border-radius:16px; padding:1.5rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.85rem;">
+                  <h3 style="font-size:1.05rem; margin:0;">Recent Activity</h3>
+                  <button onclick="resetStudentRecord()" style="background:transparent; color:var(--text3); border:1px solid var(--border); border-radius:8px; padding:5px 10px; font-size:0.72rem; cursor:pointer;">Reset</button>
+                </div>
+                <div id="record-activity-log" style="display:flex; flex-direction:column; gap:0.6rem; max-height:280px; overflow-y:auto; padding-right:4px;">
+                  <div style="color:var(--text3); font-size:0.85rem; font-style:italic;">No attempts yet — finish an experiment to see it here.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW 3: AI Voice Call -->
+        <div id="view-ai-call" class="dash-view" style="display:none; padding:2.5rem 2rem; max-width:800px; margin:0 auto;">
+          <div class="dash-header" style="text-align:center;">
+            <h2>🤖 AI <span>Voice Call</span></h2>
+            <p>Connect instantly with our AI tutor over a phone call to clear your doubts.</p>
+          </div>
+          
+          <div style="background:rgba(17,20,43,0.6); border:1px solid var(--border); border-radius:24px; padding:3rem; margin-top:2rem; position:relative; overflow:hidden;">
+            <div style="position:absolute; top:-100px; right:-100px; width:250px; height:250px; background:radial-gradient(circle, rgba(96,165,250,0.1) 0%, transparent 70%); border-radius:50%; z-index:0; pointer-events:none;"></div>
+            
+            <div style="position:relative; z-index:1; display:flex; flex-direction:column; gap:1.5rem;">
+              
+              <div>
+                <label style="display:block; font-size:0.9rem; color:var(--text2); margin-bottom:0.4rem; font-weight:600;">Your Name</label>
+                <input type="text" id="call-name" placeholder="Enter your name" style="width:100%; padding:14px; background:rgba(7,9,26,0.5); border:1px solid var(--border); border-radius:12px; color:var(--text); font-size:1rem; outline:none;">
+              </div>
+              
+              <div>
+                <label style="display:block; font-size:0.9rem; color:var(--text2); margin-bottom:0.4rem; font-weight:600;">Indian Phone Number</label>
+                <div style="display:flex; gap:0.5rem;">
+                  <div style="background:rgba(7,9,26,0.5); border:1px solid var(--border); border-radius:12px; color:var(--text); padding:14px; font-weight:600; display:flex; align-items:center;">+91</div>
+                  <input type="tel" id="call-phone" placeholder="9999999999" pattern="[0-9]{10}" style="flex:1; padding:14px; background:rgba(7,9,26,0.5); border:1px solid var(--border); border-radius:12px; color:var(--text); font-size:1rem; outline:none; letter-spacing:1px;">
+                </div>
+              </div>
+              
+              <div>
+                <label style="display:block; font-size:0.9rem; color:var(--text2); margin-bottom:0.4rem; font-weight:600;">Language</label>
+                <select id="call-language" style="width:100%; padding:14px; background:rgba(7,9,26,0.5); border:1px solid var(--border); border-radius:12px; color:var(--text); font-size:1rem; outline:none; appearance:none;">
+                  <option value="English">English</option>
+                  <option value="Hindi">Hindi</option>
+                  <option value="Kannada">Kannada</option>
+                </select>
+              </div>
+
+              <div>
+                <label style="display:block; font-size:0.9rem; color:var(--text2); margin-bottom:0.4rem; font-weight:600;">Topic</label>
+                <select id="call-topic" style="width:100%; padding:14px; background:rgba(7,9,26,0.5); border:1px solid var(--border); border-radius:12px; color:var(--text); font-size:1rem; outline:none; appearance:none;">
+                  <option value="Physics">Physics</option>
+                  <option value="Chemistry">Chemistry</option>
+                  <option value="Biology">Biology</option>
+                  <option value="Electronics">Electronics</option>
+                  <option value="General Science">General Science</option>
+                </select>
+              </div>
+              
+              <div>
+                <label style="display:block; font-size:0.9rem; color:var(--text2); margin-bottom:0.4rem; font-weight:600;">What are your doubts?</label>
+                <textarea id="call-doubts" placeholder="Briefly describe what you need help with..." style="width:100%; padding:14px; background:rgba(7,9,26,0.5); border:1px solid var(--border); border-radius:12px; color:var(--text); font-size:1rem; outline:none; min-height:100px; resize:vertical; font-family:inherit;"></textarea>
+              </div>
+              
+              <button class="btn-primary" onclick="initiateVoiceCall()" style="margin-top:1rem; padding:16px; font-size:1.1rem; display:flex; align-items:center; justify-content:center; gap:10px;">
+                📞 Call Me Now
+              </button>
+              
+              <div id="call-status" style="text-align:center; font-size:0.9rem; color:var(--accent); display:none; margin-top:0.5rem;">
+                Initiating call... Please wait.
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW 4: Notes -->
+        <div id="view-notes" class="dash-view" style="display:none; padding:2.5rem 2rem; max-width:1200px; margin:0 auto; height:calc(100vh - 150px);">
+          <div class="dash-header">
+            <h2>My <span>Notes</span></h2>
+            <p>Save your observations and formulas for every subject and topic.</p>
+          </div>
+          
+          <div style="display:flex; gap:2rem; height:calc(100% - 100px); margin-top:1.5rem;">
+            <!-- Subjects & Topics Sidebar -->
+            <div style="width:280px; background:rgba(17,20,43,0.6); border:1px solid var(--border); border-radius:16px; padding:1.5rem; display:flex; flex-direction:column; gap:1rem; overflow-y:auto;">
+              
+              <div class="notes-subject-group">
+                <div style="font-size:0.85rem; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:1px; margin-bottom:0.5rem;">⚡ Physics</div>
+                <div class="notes-topics" id="notes-list-physics">
+                  <!-- Populated dynamically -->
+                </div>
+              </div>
+              
+              <div class="notes-subject-group">
+                <div style="font-size:0.85rem; font-weight:700; color:var(--accent3); text-transform:uppercase; letter-spacing:1px; margin-bottom:0.5rem; margin-top:1rem;">🧪 Chemistry</div>
+                <div class="notes-topics" id="notes-list-chemistry">
+                </div>
+              </div>
+              
+              <div class="notes-subject-group">
+                <div style="font-size:0.85rem; font-weight:700; color:var(--green); text-transform:uppercase; letter-spacing:1px; margin-bottom:0.5rem; margin-top:1rem;">🔬 Biology</div>
+                <div class="notes-topics" id="notes-list-biology">
+                </div>
+              </div>
+              
+              <div class="notes-subject-group">
+                <div style="font-size:0.85rem; font-weight:700; color:var(--accent4); text-transform:uppercase; letter-spacing:1px; margin-bottom:0.5rem; margin-top:1rem;">⚙️ Electronics</div>
+                <div class="notes-topics" id="notes-list-electronics">
+                </div>
+              </div>
+              
+            </div>
+            
+            <!-- Editor Area -->
+            <div style="flex:1; background:rgba(17,20,43,0.6); border:1px solid var(--border); border-radius:16px; display:flex; flex-direction:column; overflow:hidden;">
+              <div style="padding:1.5rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:rgba(7,9,26,0.4);">
+                <h3 id="current-note-title" style="font-size:1.1rem; color:var(--text);">Select a topic to start taking notes</h3>
+                <span id="note-save-status" style="font-size:0.85rem; color:var(--green); opacity:0; transition:opacity 0.3s;">Saved</span>
+              </div>
+              <textarea id="note-editor" disabled placeholder="Your notes will appear here..." oninput="autoSaveNote()" style="flex:1; width:100%; background:transparent; border:none; padding:1.5rem; color:var(--text); font-size:1rem; line-height:1.6; resize:none; outline:none; font-family:inherit;"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW 5: Study Planner -->
+        <div id="view-study-planner" class="dash-view" style="display:none; padding:2.5rem 2rem; max-width:1200px; margin:0 auto; height:calc(100vh - 150px); overflow-y:auto;">
+          <div class="dash-header">
+            <h2>AI <span>Study Planner</span></h2>
+            <p>Tell us your goal — get a day-by-day plan that targets your real weak spots, with experiments to run and concepts to revise.</p>
+          </div>
+
+          <!-- Config Panel -->
+          <div style="background:rgba(17,20,43,0.6); border:1px solid var(--border); border-radius:16px; padding:1.75rem; margin-top:1.5rem;">
+            <h3 style="font-size:1.05rem; margin:0 0 1.25rem 0; color:var(--text);">📋 Configure your plan</h3>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem;">
+              <div>
+                <label style="display:block; font-size:0.78rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.5rem;">Primary goal</label>
+                <select id="sp-goal" style="width:100%; padding:12px 14px; background:rgba(7,9,26,0.5); border:1px solid var(--border); border-radius:10px; color:var(--text); font-size:0.95rem; outline:none; appearance:none;">
+                  <option value="weak">Fix my weak topics</option>
+                  <option value="exam">Prepare for an upcoming exam</option>
+                  <option value="explore">Explore new experiments</option>
+                  <option value="boards">Cover the syllabus broadly</option>
+                  <option value="revise">Quick revision sprint</option>
+                </select>
+              </div>
+              <div>
+                <label style="display:block; font-size:0.78rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.5rem;">Subject focus</label>
+                <select id="sp-focus" style="width:100%; padding:12px 14px; background:rgba(7,9,26,0.5); border:1px solid var(--border); border-radius:10px; color:var(--text); font-size:0.95rem; outline:none; appearance:none;">
+                  <option value="auto">Auto — pick from my weakest</option>
+                  <option value="physics">Physics</option>
+                  <option value="chemistry">Chemistry</option>
+                  <option value="biology">Biology</option>
+                  <option value="electronics">Electronics</option>
+                  <option value="balanced">All subjects, balanced</option>
+                </select>
+              </div>
+              <div>
+                <label style="display:block; font-size:0.78rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.5rem;">Days available</label>
+                <div style="display:flex; gap:0.4rem;">
+                  <button class="sp-pill" data-days="3" onclick="setSpDays(3, this)" style="flex:1; padding:11px; background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:10px; font-size:0.9rem; cursor:pointer;">3 days</button>
+                  <button class="sp-pill active" data-days="5" onclick="setSpDays(5, this)" style="flex:1; padding:11px; background:var(--accent-soft); color:var(--accent); border:1px solid rgba(96,165,250,0.4); border-radius:10px; font-size:0.9rem; cursor:pointer; font-weight:600;">5 days</button>
+                  <button class="sp-pill" data-days="7" onclick="setSpDays(7, this)" style="flex:1; padding:11px; background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:10px; font-size:0.9rem; cursor:pointer;">7 days</button>
+                </div>
+              </div>
+              <div>
+                <label style="display:block; font-size:0.78rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.5rem;">Hours per day: <span id="sp-hours-label" style="color:var(--accent); font-weight:700;">2</span></label>
+                <input type="range" id="sp-hours" min="1" max="6" step="1" value="2" oninput="document.getElementById('sp-hours-label').textContent = this.value" style="width:100%; accent-color:var(--accent);">
+                <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text3); margin-top:0.2rem;">
+                  <span>1h</span><span>2h</span><span>3h</span><span>4h</span><span>5h</span><span>6h</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:0.75rem; margin-top:1.25rem; flex-wrap:wrap;">
+              <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; color:var(--text2); cursor:pointer;">
+                <input type="checkbox" id="sp-include-quiz" checked style="accent-color:var(--accent);"> Include quiz revision
+              </label>
+              <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; color:var(--text2); cursor:pointer;">
+                <input type="checkbox" id="sp-include-rest" style="accent-color:var(--accent);"> Add a rest/buffer day
+              </label>
+              <div style="flex:1;"></div>
+              <button class="btn-primary" onclick="generateStudyPlan()" id="sp-generate-btn" style="padding:13px 22px; font-size:1rem; display:inline-flex; align-items:center; gap:8px; border-radius:12px;">
+                ✨ Generate my plan
+              </button>
+            </div>
+          </div>
+
+          <!-- Snapshot summary (auto-populated) -->
+          <div id="sp-snapshot" style="display:none; background:rgba(17,20,43,0.4); border:1px dashed var(--border); border-radius:14px; padding:1rem 1.25rem; margin-top:1rem;">
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:1rem; font-size:0.85rem;">
+              <div><div style="color:var(--text3); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px;">Done</div><div style="color:var(--text); font-weight:600; margin-top:2px;" id="sp-snap-done">0/16</div></div>
+              <div><div style="color:var(--text3); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px;">Avg accuracy</div><div style="color:var(--text); font-weight:600; margin-top:2px;" id="sp-snap-acc">—</div></div>
+              <div><div style="color:var(--text3); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px;">Strongest</div><div style="color:var(--green); font-weight:600; margin-top:2px;" id="sp-snap-best">—</div></div>
+              <div><div style="color:var(--text3); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px;">Needs work</div><div style="color:var(--accent3); font-weight:600; margin-top:2px;" id="sp-snap-weak">—</div></div>
+            </div>
+          </div>
+
+          <!-- Output -->
+          <div id="study-plan-output" style="margin-top:1.25rem;">
+            <div style="background:rgba(7,9,26,0.5); border:1px solid var(--border); border-radius:14px; padding:2rem; text-align:center; color:var(--text3); font-style:italic;">
+              Your personalised plan will appear here. Configure the options above and tap <strong>Generate</strong>.
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW 6: Daily Challenge -->
+        <div id="view-daily-challenge" class="dash-view" style="display:none; padding:2.5rem 2rem; max-width:880px; margin:0 auto; height:calc(100vh - 150px); overflow-y:auto;">
+          <div class="dash-header">
+            <h2>Daily <span>Challenge</span></h2>
+            <p>Three questions, picked smart. Answers you got wrong come back more often — that's how memory works. <strong>Build a streak.</strong></p>
+          </div>
+
+          <div id="dc-streak-strip" style="background:linear-gradient(135deg, rgba(251,146,60,0.18), rgba(251,146,60,0.04)); border:1px solid rgba(251,146,60,0.3); border-radius:14px; padding:1.1rem 1.4rem; margin-top:1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+            <div style="display:flex; align-items:center; gap:1rem;">
+              <div style="font-size:2rem;">🔥</div>
+              <div>
+                <div style="font-size:0.72rem; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;">Challenge streak</div>
+                <div style="font-size:1.4rem; font-weight:800; color:var(--accent3);"><span id="dc-streak">0</span> days</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:1.5rem;">
+              <div>
+                <div style="font-size:0.72rem; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;">Last played</div>
+                <div style="color:var(--text); font-weight:600; margin-top:2px;" id="dc-last-played">Never</div>
+              </div>
+              <div>
+                <div style="font-size:0.72rem; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;">Best score</div>
+                <div style="color:var(--green); font-weight:600; margin-top:2px;" id="dc-best-score">0/3</div>
+              </div>
+            </div>
+          </div>
+
+          <div id="dc-stage" style="margin-top:1.25rem;"></div>
+        </div>
+
+        <!-- VIEW 7: Practical Record File -->
+        <div id="view-practical-record" class="dash-view" style="display:none; padding:2.5rem 2rem; max-width:1240px; margin:0 auto; height:calc(100vh - 150px); overflow-y:auto;">
+          <div class="dash-header">
+            <h2>Practical <span>Record File</span></h2>
+            <p>Auto-generated lab record entries you can edit and print — Aim, Apparatus, Theory, Procedure, Observations, Result, Precautions. Just like a CBSE/ICSE practical file.</p>
+          </div>
+
+          <div style="display:grid; grid-template-columns:300px 1fr; gap:1.5rem; margin-top:1.5rem;">
+            <!-- Sidebar: experiment list -->
+            <div style="background:rgba(17,20,43,0.6); border:1px solid var(--border); border-radius:14px; padding:1.25rem; display:flex; flex-direction:column; gap:0.5rem; height:calc(100vh - 220px); overflow-y:auto;">
+              <div style="font-size:0.78rem; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.5rem;">My experiments</div>
+              <div id="pr-exp-list" style="display:flex; flex-direction:column; gap:0.4rem;">
+                <!-- populated by JS -->
+              </div>
+            </div>
+
+            <!-- Editor -->
+            <div id="pr-editor-wrap" style="background:rgba(17,20,43,0.6); border:1px solid var(--border); border-radius:14px; padding:1.5rem; height:calc(100vh - 220px); overflow-y:auto;">
+              <div id="pr-empty" style="text-align:center; color:var(--text3); padding:4rem 1rem; font-style:italic;">
+                Select an experiment from the left to view or generate its practical record entry.
+              </div>
+              <div id="pr-editor" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-bottom:1.25rem; padding-bottom:1rem; border-bottom:1px solid var(--border);">
+                  <div>
+                    <h2 id="pr-title" style="margin:0; font-size:1.5rem; font-family:'Space Grotesk',sans-serif;">Experiment</h2>
+                    <div id="pr-meta" style="font-size:0.85rem; color:var(--text3); margin-top:4px;"></div>
+                  </div>
+                  <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                    <button onclick="prGenerateAI()" id="pr-gen-btn" class="btn-primary" style="padding:9px 16px; font-size:0.85rem; border-radius:9px;">✨ Generate via AI</button>
+                    <button onclick="prSave()" style="background:var(--accent-soft); color:var(--accent); border:1px solid rgba(96,165,250,0.3); padding:9px 16px; font-size:0.85rem; border-radius:9px; cursor:pointer; font-weight:600;">💾 Save</button>
+                    <button onclick="prPrint()" style="background:transparent; color:var(--text); border:1px solid var(--border); padding:9px 16px; font-size:0.85rem; border-radius:9px; cursor:pointer; font-weight:600;">🖨 Print</button>
+                  </div>
+                </div>
+
+                <div id="pr-fields" style="display:flex; flex-direction:column; gap:1.1rem;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW 8: Formula Sheet -->
+        <div id="view-formula-sheet" class="dash-view" style="display:none; padding:2.5rem 2rem; max-width:1180px; margin:0 auto; height:calc(100vh - 150px); overflow-y:auto;">
+          <div class="dash-header">
+            <h2>Formula <span>Sheet</span></h2>
+            <p>Every key formula across physics, chemistry, biology and electronics — searchable, with units and when-to-use notes.</p>
+          </div>
+
+          <div style="background:rgba(17,20,43,0.6); border:1px solid var(--border); border-radius:14px; padding:1.25rem 1.4rem; margin-top:1.25rem; display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+            <div style="position:relative; flex:1; min-width:240px;">
+              <input id="fs-search" type="text" placeholder="🔍  Search formulas, e.g. 'period', 'Ohm', 'photosynthesis'…" oninput="renderFormulaSheet()" style="width:100%; padding:12px 16px; background:rgba(7,9,26,0.5); border:1px solid var(--border); border-radius:10px; color:var(--text); font-size:0.95rem; outline:none;">
+            </div>
+            <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+              <button class="fs-pill active" data-cat="all" onclick="filterFs('all', this)" style="padding:9px 14px; background:var(--accent-soft); color:var(--accent); border:1px solid rgba(96,165,250,0.4); border-radius:9px; font-size:0.82rem; cursor:pointer; font-weight:600;">All</button>
+              <button class="fs-pill" data-cat="physics" onclick="filterFs('physics', this)" style="padding:9px 14px; background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:9px; font-size:0.82rem; cursor:pointer;">⚡ Physics</button>
+              <button class="fs-pill" data-cat="chemistry" onclick="filterFs('chemistry', this)" style="padding:9px 14px; background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:9px; font-size:0.82rem; cursor:pointer;">🧪 Chemistry</button>
+              <button class="fs-pill" data-cat="biology" onclick="filterFs('biology', this)" style="padding:9px 14px; background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:9px; font-size:0.82rem; cursor:pointer;">🔬 Biology</button>
+              <button class="fs-pill" data-cat="electronics" onclick="filterFs('electronics', this)" style="padding:9px 14px; background:transparent; color:var(--text2); border:1px solid var(--border); border-radius:9px; font-size:0.82rem; cursor:pointer;">⚙️ Electronics</button>
+            </div>
+          </div>
+
+          <div id="fs-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:1rem; margin-top:1.25rem;">
+            <!-- populated by JS -->
+          </div>
+        </div>
+
+        <!-- VIEW 9: Achievements -->
+        <div id="view-achievements" class="dash-view" style="display:none; padding:2.5rem 2rem; max-width:1180px; margin:0 auto; height:calc(100vh - 150px); overflow-y:auto;">
+          <div class="dash-header">
+            <h2>Achievements <span>& Badges</span></h2>
+            <p>Milestones to chase. Each badge unlocks as you hit it — keep experimenting, keep scoring.</p>
+          </div>
+
+          <div id="ach-summary" style="background:linear-gradient(135deg, rgba(167,139,250,0.18), rgba(96,165,250,0.08)); border:1px solid rgba(167,139,250,0.3); border-radius:14px; padding:1.4rem 1.6rem; margin-top:1.25rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+            <div>
+              <div style="font-size:0.78rem; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;">Unlocked</div>
+              <div style="font-size:2rem; font-weight:800; color:var(--accent2); margin-top:0.2rem;"><span id="ach-unlocked">0</span> <span style="color:var(--text3); font-size:1rem; font-weight:500;">/ <span id="ach-total">0</span> badges</span></div>
+            </div>
+            <div style="flex:1; min-width:240px;">
+              <div style="height:10px; background:rgba(255,255,255,0.05); border-radius:5px; overflow:hidden;">
+                <div id="ach-bar" style="height:100%; width:0%; background:linear-gradient(90deg, var(--accent), var(--accent2)); transition:width 0.6s ease;"></div>
+              </div>
+              <div style="font-size:0.78rem; color:var(--text3); margin-top:0.5rem; text-align:right;" id="ach-pct">0%</div>
+            </div>
+          </div>
+
+          <div id="ach-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:1rem; margin-top:1.25rem;">
+            <!-- populated by JS -->
+          </div>
+        </div>
+
+        <!-- VIEW 10: AR / VR Lab — Full Immersive Experience -->
+        <div id="view-ar-vr" class="dash-view" style="display:none; height:calc(100vh - 66px); overflow:hidden; position:relative;">
+
+          <!-- AR/VR Full Screen Modal Overlay -->
+          <div id="arvr-fullscreen" style="display:none; position:fixed; inset:0; background:#000; z-index:9999; flex-direction:column;">
+            <!-- AR Camera View -->
+            <video id="ar-video" autoplay playsinline muted style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:1;"></video>
+            <!-- AR Canvas for 3D overlay -->
+            <canvas id="ar-canvas" style="position:absolute; inset:0; width:100%; height:100%; z-index:2; pointer-events:none;"></canvas>
+            <!-- Three.js 3D Equipment Canvas -->
+            <canvas id="ar-threejs-canvas" style="position:absolute; inset:0; width:100%; height:100%; z-index:9; pointer-events:none;"></canvas>
+            <!-- MediaPipe gesture video (hidden, used for processing) -->
+            <video id="mp-video" autoplay playsinline muted style="position:absolute; width:1px; height:1px; opacity:0; z-index:-1;"></video>
+            <!-- Gesture HUD overlay — full legend -->
+            <div id="ar-gesture-hud" style="position:absolute; top:70px; right:16px; z-index:50; pointer-events:none; display:none;">
+              <div style="background:rgba(7,9,26,0.93); border:1px solid rgba(74,222,128,0.5); border-radius:16px; padding:14px 16px; backdrop-filter:blur(24px); min-width:220px; box-shadow:0 8px 32px rgba(0,0,0,0.6);">
+                <div style="font-size:0.62rem; color:#4ade80; font-weight:800; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+                  <span style="width:6px; height:6px; background:#4ade80; border-radius:50%; display:inline-block; box-shadow:0 0 6px #4ade80;"></span>
+                  ✋ Gesture Controls
+                </div>
+                <div style="display:flex; flex-direction:column; gap:7px;">
+                  <div style="display:flex; align-items:center; gap:8px; padding:5px 8px; background:rgba(74,222,128,0.07); border-radius:8px;">
+                    <span style="font-size:1.2rem; flex-shrink:0;">🤌</span>
+                    <div style="font-size:0.7rem; color:rgba(255,255,255,0.85); line-height:1.3;">
+                      <b style="color:#4ade80;">Pinch</b> (index + thumb)<br><span style="color:rgba(255,255,255,0.55);">→ Grab &amp; move equipment</span>
+                    </div>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:8px; padding:5px 8px; background:rgba(248,113,113,0.07); border-radius:8px;">
+                    <span style="font-size:1.2rem; flex-shrink:0;">✊</span>
+                    <div style="font-size:0.7rem; color:rgba(255,255,255,0.85); line-height:1.3;">
+                      <b style="color:#f87171;">Fist</b> (curl all fingers)<br><span style="color:rgba(255,255,255,0.55);">→ Select equipment</span>
+                    </div>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:8px; padding:5px 8px; background:rgba(34,211,238,0.07); border-radius:8px;">
+                    <span style="font-size:1.2rem; flex-shrink:0;">🤞</span>
+                    <div style="font-size:0.7rem; color:rgba(255,255,255,0.85); line-height:1.3;">
+                      <b style="color:#22d3ee;">Two-Finger Point</b><br><span style="color:rgba(255,255,255,0.55);">→ Connect to nearby object</span>
+                    </div>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:8px; padding:5px 8px; background:rgba(167,139,250,0.07); border-radius:8px;">
+                    <span style="font-size:1.2rem; flex-shrink:0;">👋</span>
+                    <div style="font-size:0.7rem; color:rgba(255,255,255,0.85); line-height:1.3;">
+                      <b style="color:#a78bfa;">Wave / Open Hand</b><br><span style="color:rgba(255,255,255,0.55);">→ Release / deselect</span>
+                    </div>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:8px; padding:5px 8px; background:rgba(251,191,36,0.07); border-radius:8px;">
+                    <span style="font-size:1.2rem; flex-shrink:0;">🤙</span>
+                    <div style="font-size:0.7rem; color:rgba(255,255,255,0.85); line-height:1.3;">
+                      <b style="color:#fbbf24;">Thumb + Pinky Spread</b><br><span style="color:rgba(255,255,255,0.55);">→ Run / test experiment</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="margin-top:10px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px; display:flex; flex-direction:column; gap:4px;">
+                  <div id="ar-gesture-status" style="font-size:0.7rem; color:#22d3ee; font-weight:600;">Initializing camera...</div>
+                  <div id="ar-gesture-label" style="font-size:0.92rem; color:#fff; font-weight:800; min-height:20px; text-shadow:0 0 12px rgba(74,222,128,0.5);"></div>
+                </div>
+              </div>
+            </div>
+            <!-- AR Overlay UI -->
+            <div id="arvr-ui-overlay" style="position:absolute; inset:0; z-index:3; pointer-events:none;">
+              <!-- Top bar -->
+              <div style="position:absolute; top:0; left:0; right:0; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; background:linear-gradient(to bottom, rgba(0,0,0,0.7), transparent); pointer-events:all;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <button onclick="closeArVrFullscreen()" style="background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3); color:#fff; padding:8px 14px; border-radius:10px; cursor:pointer; font-size:0.85rem; font-weight:600; backdrop-filter:blur(10px);">✕ Exit</button>
+                  <div id="ar-mode-label" style="background:linear-gradient(135deg, #4ade80, #22d3ee); color:#000; font-size:0.75rem; font-weight:800; padding:5px 12px; border-radius:999px; letter-spacing:1px;">📱 AR MODE</div>
+                  <div id="ar-exp-label" style="color:#fff; font-size:0.9rem; font-weight:600; text-shadow:0 1px 4px rgba(0,0,0,0.8);"></div>
+                  <button onclick="arToggleAutoToolbar()" style="background:rgba(96,165,250,0.18); border:1px solid rgba(96,165,250,0.4); color:#60a5fa; padding:7px 12px; border-radius:9px; cursor:pointer; font-size:0.75rem; font-weight:700;">🤖 Auto-Run</button>
+                  <button onclick="arShowOutputPanel()" style="background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.4); color:#fbbf24; padding:7px 12px; border-radius:9px; cursor:pointer; font-size:0.75rem; font-weight:700;">📊 Output</button>
+                </div>
+                <div style="display:flex; gap:8px;">
+                  <button onclick="arToggleMode('ar')" id="ar-btn-ar" style="background:rgba(74,222,128,0.25); border:1px solid #4ade80; color:#4ade80; padding:7px 14px; border-radius:9px; cursor:pointer; font-size:0.78rem; font-weight:700;">📱 AR</button>
+                  <button onclick="arToggleMode('photo')" id="ar-btn-photo" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:7px 14px; border-radius:9px; cursor:pointer; font-size:0.78rem; font-weight:700;">🖼 Photo</button>
+                  <button onclick="arToggleMode('vr')" id="ar-btn-vr" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:7px 14px; border-radius:9px; cursor:pointer; font-size:0.78rem; font-weight:700;">🥽 VR</button>
+                </div>
+              </div>
+
+              <!-- Surface detection indicator -->
+              <div id="ar-surface-hint" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; pointer-events:none;">
+                <div style="border:2px dashed rgba(74,222,128,0.7); border-radius:16px; padding:20px 40px; background:rgba(0,0,0,0.4); backdrop-filter:blur(6px);">
+                  <div style="font-size:2.5rem; margin-bottom:8px;">📷</div>
+                  <div style="color:#4ade80; font-weight:700; font-size:1rem;">Point camera at a flat table surface</div>
+                  <div style="color:rgba(255,255,255,0.6); font-size:0.8rem; margin-top:4px;">or upload a photo of your workspace</div>
+                  <div style="display:flex; gap:10px; margin-top:14px; justify-content:center; pointer-events:all;">
+                    <button onclick="arStartCamera()" style="background:linear-gradient(135deg,#4ade80,#22d3ee); border:none; color:#000; font-weight:700; padding:10px 20px; border-radius:10px; cursor:pointer; font-size:0.85rem;">📷 Use Camera</button>
+                    <label style="background:rgba(167,139,250,0.25); border:1px solid #a78bfa; color:#a78bfa; font-weight:700; padding:10px 20px; border-radius:10px; cursor:pointer; font-size:0.85rem;">
+                      🖼 Upload Photo
+                      <input type="file" id="ar-photo-upload" accept="image/*" onchange="arLoadPhoto(event)" style="display:none;">
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- AR Scene Canvas (main interactive area) -->
+              <canvas id="ar-scene-canvas" style="position:absolute; inset:0; width:100%; height:100%; z-index:10; cursor:crosshair;"></canvas>
+
+              <!-- Photo background (when photo uploaded) -->
+              <img id="ar-photo-bg" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; display:none;" />
+
+              <!-- Right: Equipment Palette -->
+              <div id="ar-palette" style="position:absolute; right:0; top:70px; bottom:80px; width:220px; background:rgba(7,9,26,0.85); border-left:1px solid rgba(255,255,255,0.1); backdrop-filter:blur(20px); overflow-y:auto; padding:12px; pointer-events:all; display:none;">
+                <div style="font-size:0.7rem; color:#4ade80; text-transform:uppercase; letter-spacing:1px; font-weight:700; margin-bottom:10px; padding:0 4px;">🧪 Equipment</div>
+                <div id="ar-equipment-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+              </div>
+
+              <!-- Left: AI Guide Panel -->
+              <div id="ar-guide-panel" style="position:absolute; left:0; top:70px; width:280px; background:rgba(7,9,26,0.88); border-right:1px solid rgba(255,255,255,0.1); backdrop-filter:blur(20px); padding:14px; pointer-events:all; display:none; max-height:calc(100vh - 160px); overflow-y:auto;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                  <div style="font-size:1.3rem;">🤖</div>
+                  <div>
+                    <div style="font-size:0.75rem; color:#60a5fa; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">AI Science Guide</div>
+                    <div id="ar-exp-title-guide" style="font-size:0.88rem; font-weight:600; color:#fff;"></div>
+                  </div>
+                </div>
+                <!-- Step indicator -->
+                <div id="ar-step-indicator" style="margin-bottom:12px;"></div>
+                <!-- Instructions -->
+                <div id="ar-instruction-text" style="background:rgba(96,165,250,0.1); border:1px solid rgba(96,165,250,0.25); border-radius:10px; padding:12px; font-size:0.83rem; color:rgba(255,255,255,0.88); line-height:1.6; margin-bottom:12px;"></div>
+                <!-- Connection status -->
+                <div id="ar-connection-status" style="margin-bottom:10px; display:none;"></div>
+                <!-- Step nav -->
+                <div style="display:flex; gap:8px;">
+                  <button onclick="arPrevStep()" style="flex:1; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:8px; border-radius:8px; cursor:pointer; font-size:0.8rem;">← Prev</button>
+                  <button onclick="arNextStep()" style="flex:1; background:linear-gradient(135deg,#60a5fa,#a78bfa); border:none; color:#fff; padding:8px; border-radius:8px; cursor:pointer; font-size:0.8rem; font-weight:700;">Next →</button>
+                </div>
+                <!-- AI chat mini -->
+                <div style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.08); padding-top:12px;">
+                  <div id="ar-chat-msgs" style="min-height:60px; max-height:160px; overflow-y:auto; font-size:0.78rem; color:rgba(255,255,255,0.75); line-height:1.5; margin-bottom:8px;"></div>
+                  <div style="display:flex; gap:6px;">
+                    <input id="ar-chat-input" placeholder="Ask AI..." style="flex:1; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:7px 10px; border-radius:8px; font-size:0.78rem; outline:none;" onkeydown="if(event.key==='Enter') arSendChat()">
+                    <button onclick="arSendChat()" style="background:#60a5fa; border:none; color:#fff; padding:7px 10px; border-radius:8px; cursor:pointer; font-size:0.8rem;">↑</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bottom: Simulation Result bar -->
+              <div id="ar-result-bar" style="position:absolute; bottom:0; left:0; right:0; background:linear-gradient(to top, rgba(0,0,0,0.9), transparent); padding:14px 20px; display:none; pointer-events:all;">
+                <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+                  <div id="ar-result-text" style="color:#4ade80; font-weight:700; font-size:1rem;"></div>
+                  <div id="ar-result-detail" style="color:rgba(255,255,255,0.6); font-size:0.82rem; flex:1;"></div>
+                  <button onclick="arResetScene()" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:7px 14px; border-radius:8px; cursor:pointer; font-size:0.8rem;">🔄 Reset</button>
+                  <button onclick="arCheckCircuit()" style="background:linear-gradient(135deg,#4ade80,#22d3ee); border:none; color:#000; font-weight:700; padding:7px 16px; border-radius:8px; cursor:pointer; font-size:0.82rem;">⚡ Test Setup</button>
+                </div>
+              </div>
+
+              <!-- COMPACT AR FAB (replaces old big toolbar) -->
+              <div id="ar-auto-toolbar" style="position:absolute; bottom:100px; right:16px; z-index:60; pointer-events:all; display:none;">
+                <!-- FAB trigger button -->
+                <button id="ar-fab-btn" onclick="arToggleFabMenu()" title="Lab Controls"
+                  style="width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg,#60a5fa,#a78bfa); border:none; color:#fff; font-size:1.4rem; cursor:pointer; box-shadow:0 4px 20px rgba(96,165,250,0.5); display:flex; align-items:center; justify-content:center; transition:all 0.2s; position:relative; z-index:2;">
+                  ⚗️
+                </button>
+                <!-- FAB Menu (expands upward) -->
+                <div id="ar-fab-menu" style="position:absolute; bottom:62px; right:0; display:none; flex-direction:column; gap:8px; align-items:flex-end;">
+                  <!-- Auto-Run -->
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="background:rgba(7,9,26,0.88); color:#a78bfa; font-size:0.72rem; font-weight:700; padding:4px 10px; border-radius:999px; white-space:nowrap; backdrop-filter:blur(12px); border:1px solid rgba(167,139,250,0.3);">Auto-Run</span>
+                    <button onclick="arAutoRunExperiment(); arToggleFabMenu();" title="Auto-Run"
+                      style="width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#60a5fa,#a78bfa); border:none; color:#fff; font-size:1.1rem; cursor:pointer; box-shadow:0 2px 12px rgba(96,165,250,0.4); display:flex; align-items:center; justify-content:center;">▶</button>
+                  </div>
+                  <!-- Next Step -->
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="background:rgba(7,9,26,0.88); color:#4ade80; font-size:0.72rem; font-weight:700; padding:4px 10px; border-radius:999px; white-space:nowrap; backdrop-filter:blur(12px); border:1px solid rgba(74,222,128,0.3);">Next Step</span>
+                    <button onclick="arAutoRunStep();" title="Next Step"
+                      style="width:44px; height:44px; border-radius:50%; background:rgba(74,222,128,0.2); border:1.5px solid #4ade80; color:#4ade80; font-size:1.1rem; cursor:pointer; box-shadow:0 2px 10px rgba(74,222,128,0.2); display:flex; align-items:center; justify-content:center;">▷</button>
+                  </div>
+                  <!-- Physics Sim -->
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="background:rgba(7,9,26,0.88); color:#fbbf24; font-size:0.72rem; font-weight:700; padding:4px 10px; border-radius:999px; white-space:nowrap; backdrop-filter:blur(12px); border:1px solid rgba(251,191,36,0.3);">AR Simulate</span>
+                    <button onclick="arLaunchPhysicsSim(); arToggleFabMenu();" title="AR Physics Sim"
+                      style="width:44px; height:44px; border-radius:50%; background:rgba(251,191,36,0.18); border:1.5px solid #fbbf24; color:#fbbf24; font-size:1.2rem; cursor:pointer; box-shadow:0 2px 10px rgba(251,191,36,0.2); display:flex; align-items:center; justify-content:center;">🔬</button>
+                  </div>
+                  <!-- Results / Graph -->
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="background:rgba(7,9,26,0.88); color:#22d3ee; font-size:0.72rem; font-weight:700; padding:4px 10px; border-radius:999px; white-space:nowrap; backdrop-filter:blur(12px); border:1px solid rgba(34,211,238,0.3);">Results</span>
+                    <button onclick="arShowOutputPanel(); arPlotGraph(); arToggleFabMenu();" title="Results & Graph"
+                      style="width:44px; height:44px; border-radius:50%; background:rgba(34,211,238,0.18); border:1.5px solid #22d3ee; color:#22d3ee; font-size:1.1rem; cursor:pointer; box-shadow:0 2px 10px rgba(34,211,238,0.2); display:flex; align-items:center; justify-content:center;">📈</button>
+                  </div>
+                </div>
+                <div id="ar-auto-status" style="position:absolute; right:60px; bottom:14px; font-size:0.68rem; color:rgba(255,255,255,0.6); white-space:nowrap; background:rgba(7,9,26,0.7); padding:3px 8px; border-radius:999px; pointer-events:none; display:none;"></div>
+              </div>
+
+              <!-- AR PHYSICS SIMULATION PANEL (fullscreen interactive) -->
+              <div id="ar-phys-panel" style="position:absolute; inset:0; z-index:70; display:none; background:rgba(0,0,0,0.55); backdrop-filter:blur(4px); pointer-events:all;">
+                <div style="position:absolute; bottom:0; left:0; right:0; background:rgba(7,9,26,0.97); border-top:1px solid rgba(96,165,250,0.4); border-radius:20px 20px 0 0; padding:18px 20px 24px; max-height:85vh; overflow-y:auto;">
+                  <!-- Header -->
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+                    <div>
+                      <div id="ar-phys-title" style="font-size:1.05rem; font-weight:800; color:#fff;"></div>
+                      <div style="font-size:0.72rem; color:#60a5fa; margin-top:2px;">AR Live Simulation</div>
+                    </div>
+                    <button onclick="arClosePhysSim()" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; width:32px; height:32px; border-radius:8px; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center;">✕</button>
+                  </div>
+                  <!-- Canvas for physics animation -->
+                  <div style="position:relative; border:1px solid rgba(96,165,250,0.25); border-radius:14px; overflow:hidden; background:rgba(0,0,0,0.4); margin-bottom:14px;">
+                    <canvas id="ar-phys-canvas" width="700" height="280" style="width:100%; display:block;"></canvas>
+                    <div id="ar-phys-overlay" style="position:absolute; top:10px; left:14px; font-size:0.72rem; color:rgba(255,255,255,0.7); font-family:monospace; line-height:1.6;"></div>
+                  </div>
+                  <!-- Controls row -->
+                  <div id="ar-phys-controls" style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px;"></div>
+                  <!-- Metrics row -->
+                  <div id="ar-phys-metrics" style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px;"></div>
+                  <!-- Gesture hint -->
+                  <div style="font-size:0.7rem; color:rgba(255,255,255,0.4); text-align:center; margin-bottom:10px;" id="ar-phys-gesture-hint">👆 Drag on canvas to interact • Touch to swing/push</div>
+                  <!-- Action buttons -->
+                  <div style="display:flex; gap:8px;">
+                    <button id="ar-phys-run-btn" onclick="arPhysToggleRun()" style="flex:1; background:linear-gradient(135deg,#60a5fa,#a78bfa); border:none; color:#fff; font-weight:700; padding:10px; border-radius:10px; cursor:pointer; font-size:0.88rem;">▶ Start</button>
+                    <button onclick="arPhysReset()" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:10px 16px; border-radius:10px; cursor:pointer; font-size:0.88rem;">↺ Reset</button>
+                    <button onclick="arPhysShowResults()" style="background:rgba(74,222,128,0.15); border:1px solid rgba(74,222,128,0.4); color:#4ade80; padding:10px 16px; border-radius:10px; cursor:pointer; font-size:0.88rem; font-weight:700;">📊 Results</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- FRONT-FACE OUTPUT PANEL (live experiment output & graphs) -->
+              <div id="ar-output-panel" style="position:absolute; top:70px; left:50%; transform:translateX(-50%); z-index:55; pointer-events:all; display:none; width:520px; max-width:90vw;">
+                <div style="background:rgba(7,9,26,0.97); border:1px solid rgba(74,222,128,0.5); border-radius:18px; padding:18px 20px; backdrop-filter:blur(28px); box-shadow:0 12px 48px rgba(0,0,0,0.8);">
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+                    <div style="font-size:0.72rem; color:#4ade80; font-weight:800; text-transform:uppercase; letter-spacing:1.5px;">📊 Live Experiment Output</div>
+                    <button onclick="document.getElementById('ar-output-panel').style.display='none'" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; width:28px; height:28px; border-radius:8px; cursor:pointer; font-size:1rem; line-height:1;">✕</button>
+                  </div>
+                  <!-- Experiment title -->
+                  <div id="ar-output-exp-title" style="font-size:1rem; font-weight:800; color:#fff; margin-bottom:12px;"></div>
+                  <!-- Metric grid -->
+                  <div id="ar-output-metrics" style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px;"></div>
+                  <!-- Graph canvas -->
+                  <div style="position:relative; border:1px solid rgba(255,255,255,0.1); border-radius:12px; overflow:hidden; background:rgba(0,0,0,0.3);">
+                    <canvas id="ar-output-graph" width="480" height="200" style="width:100%; display:block;"></canvas>
+                    <div id="ar-output-graph-label" style="position:absolute; bottom:8px; right:10px; font-size:0.65rem; color:rgba(255,255,255,0.4); font-family:monospace;"></div>
+                  </div>
+                  <!-- Calculation summary -->
+                  <div id="ar-output-calc" style="margin-top:12px; background:rgba(96,165,250,0.08); border:1px solid rgba(96,165,250,0.2); border-radius:10px; padding:10px 12px; font-size:0.75rem; color:rgba(255,255,255,0.75); line-height:1.6; font-family:monospace;"></div>
+                </div>
+              </div>
+
+              <!-- Object controls (shown when object selected) -->
+              <div id="ar-obj-controls" style="position:absolute; bottom:80px; left:50%; transform:translateX(-50%); display:none; pointer-events:all;">
+                <div style="background:rgba(7,9,26,0.9); border:1px solid rgba(255,255,255,0.15); border-radius:14px; padding:10px 14px; display:flex; gap:10px; align-items:center; backdrop-filter:blur(20px);">
+                  <div id="ar-selected-label" style="color:#60a5fa; font-weight:700; font-size:0.85rem; min-width:80px;"></div>
+                  <div style="width:1px; height:24px; background:rgba(255,255,255,0.15);"></div>
+                  <button onclick="arRotateSelected(-45)" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.15); color:#fff; width:32px; height:32px; border-radius:8px; cursor:pointer; font-size:1rem;">↺</button>
+                  <button onclick="arRotateSelected(45)" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.15); color:#fff; width:32px; height:32px; border-radius:8px; cursor:pointer; font-size:1rem;">↻</button>
+                  <button onclick="arScaleSelected(0.8)" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.15); color:#fff; width:32px; height:32px; border-radius:8px; cursor:pointer; font-size:1rem;">−</button>
+                  <button onclick="arScaleSelected(1.25)" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.15); color:#fff; width:32px; height:32px; border-radius:8px; cursor:pointer; font-size:1rem;">+</button>
+                  <button onclick="arStartConnect()" id="ar-connect-btn" style="background:rgba(34,211,238,0.15); border:1px solid #22d3ee; color:#22d3ee; padding:6px 12px; border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:700;">🔗 Connect</button>
+                  <button onclick="arDeleteSelected()" style="background:rgba(248,113,113,0.15); border:1px solid #f87171; color:#f87171; padding:6px 12px; border-radius:8px; cursor:pointer; font-size:0.75rem; font-weight:700;">🗑 Remove</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============ MAIN AR/VR DASHBOARD PANEL ============ -->
+          <div style="display:flex; height:100%; overflow:hidden;">
+            
+            <!-- Left: Experiment picker & controls -->
+            <div style="width:300px; flex-shrink:0; background:rgba(7,9,26,0.6); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden;">
+              
+              <!-- Header -->
+              <div style="padding:20px 18px 14px; border-bottom:1px solid var(--border); flex-shrink:0;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                  <span style="font-size:1.4rem;">🥽</span>
+                  <div>
+                    <div style="font-size:1.05rem; font-weight:800; color:var(--text);">AR/VR Science Lab</div>
+                    <div style="font-size:0.72rem; color:#4ade80; font-weight:600; letter-spacing:0.5px;">NovaSci XR Engine</div>
+                  </div>
+                </div>
+                <p style="font-size:0.78rem; color:var(--text2); line-height:1.5; margin:0;">Place 3D equipment on your real desk. Connect, interact & simulate — all in augmented reality.</p>
+              </div>
+
+              <!-- Experiment search & filter -->
+              <div style="padding:12px 14px; border-bottom:1px solid var(--border); flex-shrink:0;">
+                <input id="ar-exp-search" oninput="arFilterExps(this.value)" placeholder="🔍 Search experiments..." style="width:100%; background:rgba(255,255,255,0.06); border:1px solid var(--border); color:var(--text); padding:8px 12px; border-radius:9px; font-size:0.82rem; outline:none; box-sizing:border-box;">
+                <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;" id="ar-cat-filters">
+                  <button onclick="arFilterCat('all',this)" class="ar-cat-btn ar-cat-active" style="font-size:0.68rem; padding:4px 10px; border-radius:999px; border:1px solid rgba(96,165,250,0.4); background:rgba(96,165,250,0.15); color:#60a5fa; cursor:pointer; font-weight:600;">All</button>
+                  <button onclick="arFilterCat('physics',this)" class="ar-cat-btn" style="font-size:0.68rem; padding:4px 10px; border-radius:999px; border:1px solid var(--border); background:transparent; color:var(--text2); cursor:pointer; font-weight:600;">⚡ Physics</button>
+                  <button onclick="arFilterCat('chemistry',this)" class="ar-cat-btn" style="font-size:0.68rem; padding:4px 10px; border-radius:999px; border:1px solid var(--border); background:transparent; color:var(--text2); cursor:pointer; font-weight:600;">🧪 Chem</button>
+                  <button onclick="arFilterCat('biology',this)" class="ar-cat-btn" style="font-size:0.68rem; padding:4px 10px; border-radius:999px; border:1px solid var(--border); background:transparent; color:var(--text2); cursor:pointer; font-weight:600;">🔬 Bio</button>
+                  <button onclick="arFilterCat('electronics',this)" class="ar-cat-btn" style="font-size:0.68rem; padding:4px 10px; border-radius:999px; border:1px solid var(--border); background:transparent; color:var(--text2); cursor:pointer; font-weight:600;">⚙️ Elec</button>
+                </div>
+              </div>
+
+              <!-- Experiment list -->
+              <div id="ar-exp-list" style="flex:1; overflow-y:auto; padding:10px 10px;"></div>
+            </div>
+
+            <!-- Right: Preview + info area -->
+            <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; background:rgba(7,9,26,0.3);">
+              
+              <!-- Selected experiment preview -->
+              <div id="ar-preview-area" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2rem; position:relative; overflow:hidden;">
+                
+                <!-- Background glow -->
+                <div style="position:absolute; inset:0; background:radial-gradient(ellipse 60% 60% at 50% 50%, rgba(74,222,128,0.06), transparent); pointer-events:none;"></div>
+                <div style="position:absolute; inset:0; background-image:linear-gradient(rgba(96,165,250,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(96,165,250,0.03) 1px,transparent 1px); background-size:40px 40px; pointer-events:none;"></div>
+
+                <!-- Default state: no experiment selected -->
+                <div id="ar-no-selection" style="text-align:center; max-width:420px; position:relative; z-index:1;">
+                  <div style="font-size:5rem; margin-bottom:1rem; filter:drop-shadow(0 0 30px rgba(74,222,128,0.4));">🥽</div>
+                  <h2 style="font-size:1.5rem; font-weight:800; margin:0 0 0.75rem; background:linear-gradient(135deg,#4ade80,#60a5fa,#a78bfa); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">Immersive AR/VR Lab</h2>
+                  <p style="color:var(--text2); font-size:0.9rem; line-height:1.65; margin:0 0 1.5rem;">Pick an experiment from the left panel. The system will place realistic 3D equipment on your real desk using your camera — then connect, interact, and simulate the experiment in your actual room.</p>
+                  
+                  <!-- Feature pills -->
+                  <div style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:1.5rem;">
+                    <div style="background:rgba(74,222,128,0.12); border:1px solid rgba(74,222,128,0.3); border-radius:999px; padding:6px 14px; font-size:0.75rem; color:#4ade80; font-weight:600;">📷 Real surface detection</div>
+                    <div style="background:rgba(96,165,250,0.12); border:1px solid rgba(96,165,250,0.3); border-radius:999px; padding:6px 14px; font-size:0.75rem; color:#60a5fa; font-weight:600;">🔗 Wire connections</div>
+                    <div style="background:rgba(167,139,250,0.12); border:1px solid rgba(167,139,250,0.3); border-radius:999px; padding:6px 14px; font-size:0.75rem; color:#a78bfa; font-weight:600;">✋ Hand/touch controls</div>
+                    <div style="background:rgba(251,146,60,0.12); border:1px solid rgba(251,146,60,0.3); border-radius:999px; padding:6px 14px; font-size:0.75rem; color:#fb923c; font-weight:600;">💡 Live simulations</div>
+                    <div style="background:rgba(34,211,238,0.12); border:1px solid rgba(34,211,238,0.3); border-radius:999px; padding:6px 14px; font-size:0.75rem; color:#22d3ee; font-weight:600;">🤖 AI step guide</div>
+                    <div style="background:rgba(248,113,113,0.12); border:1px solid rgba(248,113,113,0.3); border-radius:999px; padding:6px 14px; font-size:0.75rem; color:#f87171; font-weight:600;">🥽 VR Cardboard</div>
+                  </div>
+
+                  <!-- How it works steps -->
+                  <div style="background:rgba(17,20,43,0.7); border:1px solid var(--border); border-radius:14px; padding:1.25rem; text-align:left;">
+                    <div style="font-size:0.8rem; color:var(--text3); font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">How it works</div>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                      <div style="display:flex; gap:10px; align-items:flex-start;">
+                        <div style="flex-shrink:0; width:22px; height:22px; border-radius:50%; background:rgba(74,222,128,0.2); color:#4ade80; font-size:0.7rem; font-weight:800; display:flex; align-items:center; justify-content:center;">1</div>
+                        <div style="font-size:0.8rem; color:var(--text2); padding-top:2px;">Select an experiment → click <strong style="color:var(--text);">Launch AR</strong></div>
+                      </div>
+                      <div style="display:flex; gap:10px; align-items:flex-start;">
+                        <div style="flex-shrink:0; width:22px; height:22px; border-radius:50%; background:rgba(96,165,250,0.2); color:#60a5fa; font-size:0.7rem; font-weight:800; display:flex; align-items:center; justify-content:center;">2</div>
+                        <div style="font-size:0.8rem; color:var(--text2); padding-top:2px;">Point your camera at a flat table or <strong style="color:var(--text);">upload a photo</strong> of your desk</div>
+                      </div>
+                      <div style="display:flex; gap:10px; align-items:flex-start;">
+                        <div style="flex-shrink:0; width:22px; height:22px; border-radius:50%; background:rgba(167,139,250,0.2); color:#a78bfa; font-size:0.7rem; font-weight:800; display:flex; align-items:center; justify-content:center;">3</div>
+                        <div style="font-size:0.8rem; color:var(--text2); padding-top:2px;">3D equipment auto-places on your table. <strong style="color:var(--text);">Drag, resize, rotate</strong> objects</div>
+                      </div>
+                      <div style="display:flex; gap:10px; align-items:flex-start;">
+                        <div style="flex-shrink:0; width:22px; height:22px; border-radius:50%; background:rgba(251,146,60,0.2); color:#fb923c; font-size:0.7rem; font-weight:800; display:flex; align-items:center; justify-content:center;">4</div>
+                        <div style="font-size:0.8rem; color:var(--text2); padding-top:2px;"><strong style="color:var(--text);">Connect equipment</strong> with wires — bulbs glow, liquids flow, reactions fire!</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Selected experiment state -->
+                <div id="ar-selected-preview" style="display:none; width:100%; max-width:640px; position:relative; z-index:1;">
+                  
+                  <!-- Experiment header -->
+                  <div style="text-align:center; margin-bottom:1.5rem;">
+                    <div id="ar-prev-icon" style="font-size:3.5rem; margin-bottom:0.5rem; filter:drop-shadow(0 0 20px rgba(74,222,128,0.5));"></div>
+                    <h2 id="ar-prev-title" style="font-size:1.4rem; font-weight:800; margin:0 0 0.3rem;"></h2>
+                    <div id="ar-prev-cat" style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:1px;"></div>
+                  </div>
+
+                  <!-- 3D Equipment preview -->
+                  <div style="background:rgba(17,20,43,0.8); border:1px solid var(--border); border-radius:16px; padding:1.25rem; margin-bottom:1rem;">
+                    <div style="font-size:0.75rem; color:var(--text3); font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">🧰 Equipment that will be placed in AR</div>
+                    <div id="ar-prev-equipment" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+                  </div>
+
+                  <!-- Connections preview -->
+                  <div style="background:rgba(17,20,43,0.8); border:1px solid var(--border); border-radius:16px; padding:1.25rem; margin-bottom:1rem;">
+                    <div style="font-size:0.75rem; color:var(--text3); font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">🔗 Connections you'll make</div>
+                    <div id="ar-prev-connections" style="font-size:0.82rem; color:var(--text2); line-height:1.8;"></div>
+                  </div>
+
+                  <!-- Expected outcome -->
+                  <div style="background:linear-gradient(135deg,rgba(74,222,128,0.08),rgba(34,211,238,0.05)); border:1px solid rgba(74,222,128,0.2); border-radius:16px; padding:1.25rem; margin-bottom:1.5rem;">
+                    <div style="font-size:0.75rem; color:#4ade80; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">✨ Expected Result</div>
+                    <div id="ar-prev-outcome" style="font-size:0.88rem; color:var(--text2); line-height:1.6;"></div>
+                  </div>
+
+                  <!-- Launch buttons -->
+                  <div style="display:flex; gap:10px;">
+                    <button onclick="launchArVr('ar')" style="flex:2; background:linear-gradient(135deg,#4ade80,#22d3ee); border:none; color:#000; font-weight:800; padding:14px; border-radius:12px; cursor:pointer; font-size:1rem; letter-spacing:0.3px; transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 24px rgba(74,222,128,0.4)'" onmouseout="this.style.transform=''; this.style.boxShadow=''">📱 Launch AR Lab</button>
+                    <button onclick="launchArVr('photo')" style="flex:1; background:rgba(167,139,250,0.15); border:1px solid rgba(167,139,250,0.4); color:#a78bfa; font-weight:700; padding:14px; border-radius:12px; cursor:pointer; font-size:0.88rem; transition:all 0.2s;" onmouseover="this.style.background='rgba(167,139,250,0.25)'" onmouseout="this.style.background='rgba(167,139,250,0.15)'">🖼 Use Photo</button>
+                    <button onclick="launchArVr('vr')" style="flex:1; background:rgba(167,139,250,0.15); border:1px solid rgba(167,139,250,0.4); color:#a78bfa; font-weight:700; padding:14px; border-radius:12px; cursor:pointer; font-size:0.88rem; transition:all 0.2s;" onmouseover="this.style.background='rgba(167,139,250,0.25)'" onmouseout="this.style.background='rgba(167,139,250,0.15)'">🥽 VR Mode</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bottom stats strip -->
+              <div style="border-top:1px solid var(--border); padding:12px 20px; display:flex; gap:2rem; align-items:center; background:rgba(7,9,26,0.5); flex-shrink:0; flex-wrap:wrap;">
+                <div style="display:flex; gap:6px; align-items:center;"><span style="font-size:1.1rem;">📱</span><div><div style="font-size:0.65rem; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;">Surface Detection</div><div style="font-size:0.82rem; font-weight:700; color:#4ade80;">AI-Powered</div></div></div>
+                <div style="display:flex; gap:6px; align-items:center;"><span style="font-size:1.1rem;">🔗</span><div><div style="font-size:0.65rem; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;">Connections</div><div style="font-size:0.82rem; font-weight:700; color:#60a5fa;">Snap & Wire</div></div></div>
+                <div style="display:flex; gap:6px; align-items:center;"><span style="font-size:1.1rem;">⚡</span><div><div style="font-size:0.65rem; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;">Simulation</div><div style="font-size:0.82rem; font-weight:700; color:#fb923c;">Real-time</div></div></div>
+                <div style="display:flex; gap:6px; align-items:center;"><span style="font-size:1.1rem;">🤖</span><div><div style="font-size:0.65rem; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;">AI Guide</div><div style="font-size:0.82rem; font-weight:700; color:#a78bfa;">Step-by-Step</div></div></div>
+                <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+                  <div id="xr-launch-grid" style="display:none;"></div>
+                  <span style="font-size:0.75rem; color:var(--text3);">All 16 experiments AR-ready</span>
+                  <div style="background:linear-gradient(135deg,#4ade80,#a78bfa); color:#000; font-size:0.62rem; padding:3px 9px; border-radius:999px; font-weight:800; letter-spacing:0.5px;">NEW</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- LAB SCREEN -->
+  <div id="lab" class="screen">
+    <div class="lab-header">
+      <div class="lab-back" onclick="exitLab()" title="Back">←</div>
+      <div class="lab-title-wrap">
+        <div class="lab-title" id="lab-exp-title">Experiment</div>
+        <div class="lab-cat-badge" id="lab-cat-badge"></div>
+      </div>
+      <div class="lab-progress-wrap">
+        <div class="lab-step-info" id="step-info">Step 1/4</div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="prog-fill" style="width:25%"></div>
+        </div>
+      </div>
+      <!-- AR/VR Mode Switcher -->
+      <div class="xr-mode-switch" style="display:flex; align-items:center; gap:4px; background:rgba(7,9,26,0.6); border:1px solid var(--border); border-radius:11px; padding:4px; backdrop-filter:blur(10px);">
+        <button class="xr-mode-btn active" data-mode="2d" onclick="setXrMode('2d')" title="Standard 2D view" style="background:var(--accent-soft); color:var(--accent); border:none; padding:7px 12px; border-radius:8px; font-size:0.78rem; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; letter-spacing:0.5px;">2D</button>
+        <button class="xr-mode-btn" data-mode="ar" onclick="setXrMode('ar')" title="View in AR (augmented reality)" style="background:transparent; color:var(--text2); border:none; padding:7px 12px; border-radius:8px; font-size:0.78rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; letter-spacing:0.5px;">📱 AR</button>
+        <button class="xr-mode-btn" data-mode="vr" onclick="setXrMode('vr')" title="VR mode (stereoscopic)" style="background:transparent; color:var(--text2); border:none; padding:7px 12px; border-radius:8px; font-size:0.78rem; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; letter-spacing:0.5px;">🥽 VR</button>
+      </div>
+    </div>
+    <div class="lab-layout">
+      <!-- Simulation Canvas -->
+      <div class="lab-canvas-wrap" id="canvas-wrap">
+        <canvas id="sim-canvas"></canvas>
+
+        <!-- Controls panel (sliders, dropdowns) — populated dynamically -->
+        <div class="sim-controls" id="sim-controls">
+          <h4>Controls</h4>
+          <div id="controls-body"></div>
+        </div>
+
+        <!-- Live readouts panel -->
+        <div class="sim-readouts" id="sim-readouts">
+          <h4>Measurements</h4>
+          <div id="readouts-body"></div>
+        </div>
+
+        <!-- Proactive AI step suggestion -->
+        <div class="step-suggestion" id="step-suggestion" style="display:none;">
+          <div class="ai-avatar">🤖</div>
+          <div class="ai-content">
+            <div class="ai-label">AI Suggestion</div>
+            <div class="ai-text" id="suggestion-text"></div>
+          </div>
+          <button class="dismiss-x" onclick="dismissSuggestion()">✕</button>
+        </div>
+      </div>
+
+      <!-- Right Panel -->
+      <div class="lab-panel">
+        <div class="panel-tabs">
+          <button class="panel-tab active" onclick="switchTab('steps', this)">📋 Steps</button>
+          <button class="panel-tab" onclick="switchTab('ai', this)">🤖 AI Guide</button>
+          <button class="panel-tab" onclick="switchTab('results', this)">📊 Results</button>
+        </div>
+        <div class="panel-content" id="panel-steps">
+          <div class="steps-list" id="steps-list"></div>
+          <button class="next-step-btn" id="next-btn" onclick="nextStep()">Next Step →</button>
+        </div>
+        <div class="panel-content" id="panel-ai" style="display:none;">
+          <div class="toggles-row">
+            <button class="eli5-toggle" id="eli5-btn" onclick="toggleELI5()">👦 ELI5 Mode</button>
+            <button class="lang-toggle" id="lang-btn2" onclick="toggleLang()">EN</button>
+          </div>
+          <div class="ai-chat">
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input-wrap">
+              <input class="chat-input" id="chat-input" placeholder="Ask anything about this experiment..."
+                onkeydown="if(event.key==='Enter') sendMessage()">
+              <button class="voice-btn" id="voice-btn" onclick="toggleVoice()" title="Voice input">🎤</button>
+              <button class="send-btn" onclick="sendMessage()">↑</button>
+            </div>
+          </div>
+        </div>
+        <div class="panel-content" id="panel-results" style="display:none;">
+          <div class="results-area" id="results-area">
+            <div style="color:var(--text2); font-size:0.85rem; text-align:center; padding:1.5rem 0;">
+              Start the experiment to see live measurements
+            </div>
+          </div>
+          <div class="chart-card" id="chart-card" style="display:none;">
+            <div class="chart-card-title">
+              <span id="chart-title">DATA</span>
+              <span id="chart-x-label" style="font-size:0.65rem; color:var(--text3);"></span>
+            </div>
+            <canvas class="results-chart" id="results-chart" width="600" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="nova-app.js"></script>
+</body>
+
+</html>
